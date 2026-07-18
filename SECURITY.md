@@ -9,7 +9,7 @@ model of the sync backend (`server/`) and the client auth/sync code (`src/lib/ap
 
 - **Server compromise / curious admin**: the server stores your habits only as **encrypted blobs**. It
   cannot read their contents (see E2E encryption below).
-- **Network attacker (MITM)**: all API traffic is over HTTPS when deployed behind a reverse proxy / TLS.
+- **Network attacker (MITM)**: all API traffic is over HTTPS (Vercel provides TLS; for self-hosting, put the server behind a TLS proxy).
   Tokens travel in the `Authorization: Bearer` header; a leaked token is short-lived (see tokens).
 - **Malicious website**: CORS is restricted to an allowlist; an arbitrary site cannot call the API on a
   user's behalf. OAuth uses `state` + PKCE to prevent CSRF.
@@ -53,9 +53,9 @@ The server stores only the ciphertext.
 
 ## Transport security (TLS)
 
-The server speaks plain HTTP by default. **Run it behind a reverse proxy (nginx/Caddy) with TLS** (or a
-tunnel) before exposing it to untrusted networks. Set `APP_URL` to your frontend's HTTPS origin so OAuth
-redirects land correctly.
+The server speaks plain HTTP by default. **Deploy it behind TLS** — Vercel provides this automatically, or
+for self-hosting put it behind a reverse proxy (nginx/Caddy) / tunnel before exposing it to untrusted
+networks. Set `APP_URL` to your frontend's HTTPS origin so OAuth redirects land correctly.
 
 ## Social login (OAuth)
 
@@ -85,43 +85,24 @@ verification link is logged to the server console for local dev.
 - LWW sync is single-writer by snapshot timestamp; concurrent edits on two offline devices resolve by
   last-write-wins (no per-field merge).
 
-## Deploying (self-host)
+## Deploying (Vercel + Neon)
 
-The frontend is a static SPA and the server is a small Node process. One process can serve both (the
-server serves the built `dist/` and the `/api` routes), so a single TLS reverse proxy fronts everything.
+Lifelog is designed for **Vercel (serverless) + Neon Postgres** — see `DEPLOY.md` for the full runbook.
+Summary:
 
-**Build & run (or use Docker):**
+- The Vite SPA and the Express API run on the **same origin** (Vercel), so no CORS is needed.
+- `vercel.json` rewrites `/api/*` to the `api/` serverless function; all other routes serve `index.html`.
+- `api/index.js` exports the Express app from `server/index.js`. The app uses `@neondatabase/serverless`
+  (async SQL) and **does not** `listen` on Vercel (the `VERCEL` env disables it).
+- The database is **Neon serverless Postgres** (`DATABASE_URL`). Tables are created automatically on first
+  run. Neon's free tier is permanent and scale-to-zero.
+- **TLS is provided by Vercel.** Set `TRUST_PROXY=1` (Vercel sets this automatically via the `VERCEL` env)
+  so the rate limiter keys off `X-Forwarded-For`.
+- Serverless caveats handled: the rate limiter is **Postgres-backed** (in-memory stores don't survive
+  invocations), and OAuth PKCE state lives in a short-lived **httpOnly cookie** (not process memory).
 
-```bash
-# 1) Build the frontend (VITE_API_URL is left unset -> same-origin /api calls)
-npm run build
-# 2) Run the server (it also serves dist/)
-cd server && npm install && node index.js   # http://localhost:8787
-```
-
-**Docker (reproducible):** `server/Dockerfile` builds the frontend and runs the server; SQLite lives on
-the `lifelog-data` volume. `docker-compose.yml` + `.env.example` wire it up:
-
-```bash
-cp .env.example .env   # set CORS_ORIGIN / APP_URL / PUBLIC_URL to your domain
-docker compose up -d --build
-```
-
-**TLS reverse proxy (required for production):** the server is plain HTTP. Put it behind Caddy or nginx
-with HTTPS. `Caddyfile` and `nginx.conf` are provided as starting points. With Caddy, TLS is automatic:
-
-```bash
-caddy run --config Caddyfile   # CORS_ORIGIN/APP_URL -> https://yourdomain.com; TRUST_PROXY=1
-```
-
-After proxying, set `TRUST_PROXY=1` so the rate limiter keys off `X-Forwarded-For`, and set `CORS_ORIGIN`
-to your frontend's HTTPS origin(s). The frontend's `connect-src` CSP should be tightened to that origin
-via your host's response headers.
-
-**Free hosting options:** a static host (Cloudflare Pages / Netlify / GitHub Pages) for the SPA plus the
-server on a free VM with a persistent disk (e.g. Oracle Cloud Always-Free) fronted by Caddy (auto-TLS) is
-the most robust free+persistent setup. Render/Railway free tiers work too but use ephemeral filesystems, so
-mount a volume (or move to a managed DB) to keep `server/data/` across restarts.
+Free hosting: **Vercel Hobby + Neon Free = $0**. Local dev uses a Neon connection string too
+(`DATABASE_URL` in `.env`). Do **not** expose `vite dev` publicly (its esbuild dev-server advisory).
 
 
 ## Reporting

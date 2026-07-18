@@ -95,7 +95,7 @@ server copy on first login. See `SECURITY.md` for the full security model.
 
 ### Production notes
 
-- **TLS**: the server is plain HTTP by default — put it behind a reverse proxy (nginx/Caddy) with HTTPS.
+- **TLS**: on Vercel, TLS is automatic. For self-hosting, put the plain-HTTP server behind a reverse proxy (nginx/Caddy) with HTTPS.
 - **CORS**: set `CORS_ORIGIN` to your frontend's origin(s); unknown origins get `403`.
 - **E2E**: for password accounts the key is derived from your password, so sync works across devices
   without the server seeing it. For Google/GitHub accounts a random device-bound key is used — export it

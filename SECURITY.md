@@ -85,6 +85,45 @@ verification link is logged to the server console for local dev.
 - LWW sync is single-writer by snapshot timestamp; concurrent edits on two offline devices resolve by
   last-write-wins (no per-field merge).
 
+## Deploying (self-host)
+
+The frontend is a static SPA and the server is a small Node process. One process can serve both (the
+server serves the built `dist/` and the `/api` routes), so a single TLS reverse proxy fronts everything.
+
+**Build & run (or use Docker):**
+
+```bash
+# 1) Build the frontend (VITE_API_URL is left unset -> same-origin /api calls)
+npm run build
+# 2) Run the server (it also serves dist/)
+cd server && npm install && node index.js   # http://localhost:8787
+```
+
+**Docker (reproducible):** `server/Dockerfile` builds the frontend and runs the server; SQLite lives on
+the `lifelog-data` volume. `docker-compose.yml` + `.env.example` wire it up:
+
+```bash
+cp .env.example .env   # set CORS_ORIGIN / APP_URL / PUBLIC_URL to your domain
+docker compose up -d --build
+```
+
+**TLS reverse proxy (required for production):** the server is plain HTTP. Put it behind Caddy or nginx
+with HTTPS. `Caddyfile` and `nginx.conf` are provided as starting points. With Caddy, TLS is automatic:
+
+```bash
+caddy run --config Caddyfile   # CORS_ORIGIN/APP_URL -> https://yourdomain.com; TRUST_PROXY=1
+```
+
+After proxying, set `TRUST_PROXY=1` so the rate limiter keys off `X-Forwarded-For`, and set `CORS_ORIGIN`
+to your frontend's HTTPS origin(s). The frontend's `connect-src` CSP should be tightened to that origin
+via your host's response headers.
+
+**Free hosting options:** a static host (Cloudflare Pages / Netlify / GitHub Pages) for the SPA plus the
+server on a free VM with a persistent disk (e.g. Oracle Cloud Always-Free) fronted by Caddy (auto-TLS) is
+the most robust free+persistent setup. Render/Railway free tiers work too but use ephemeral filesystems, so
+mount a volume (or move to a managed DB) to keep `server/data/` across restarts.
+
+
 ## Reporting
 
 This is a personal/self-hosted project. For sensitive issues, rotate your sync credentials and wipe

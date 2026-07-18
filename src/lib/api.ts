@@ -1,4 +1,8 @@
-const BASE = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8787'
+// Empty default => relative URLs, so the app works same-origin when the API and
+// the static files are served by one host (e.g. behind a TLS reverse proxy).
+// Set VITE_API_URL to an absolute origin (e.g. http://localhost:8787) when the
+// API is on a different origin (local dev, separate frontend host).
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 export { BASE as API_BASE }
 
 export interface AuthUser {

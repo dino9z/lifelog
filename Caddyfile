@@ -1,0 +1,10 @@
+# Caddyfile — drop next to your Caddy binary (or in the same dir as docker-compose with a caddy service).
+# Caddy obtains and renews Let's Encrypt TLS certificates automatically.
+#
+# Usage:
+#   caddy run --config Caddyfile
+# Then point CORS_ORIGIN / APP_URL at https://yourdomain.com and set TRUST_PROXY=1.
+
+yourdomain.com {
+  reverse_proxy localhost:8787
+}

@@ -45,6 +45,9 @@ db.exec(`
 `)
 
 const app = express()
+// Enable when the server sits behind a reverse proxy (nginx/Caddy/Traefik) so the
+// rate limiter keys off the real client IP from X-Forwarded-For instead of the proxy's.
+if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1)
 
 const ALLOWED = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:4173,http://localhost:4184,http://localhost:8787')
   .split(',')
@@ -339,5 +342,16 @@ app.get('/api/auth/:provider/callback', async (req, res) => {
     res.status(500).send('OAuth error')
   }
 })
+
+// Optional: serve the built SPA from the same process so a single TLS reverse proxy
+// can front the whole app. Set STATIC_DIR if your layout differs.
+const STATIC_DIR = process.env.STATIC_DIR || join(__dirname, '..', 'dist')
+if (existsSync(STATIC_DIR)) {
+  app.use(express.static(STATIC_DIR))
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next()
+    res.sendFile(join(STATIC_DIR, 'index.html'))
+  })
+}
 
 app.listen(PORT, () => console.log(`Lifelog sync server on ${BASE}`))

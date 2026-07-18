@@ -1,0 +1,29 @@
+services:
+  lifelog:
+    build: ./server
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - APP_URL=${APP_URL}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - ACCESS_TTL_MIN=${ACCESS_TTL_MIN:-60}
+      - REFRESH_TTL_DAYS=${REFRESH_TTL_DAYS:-30}
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_FROM=${SMTP_FROM}
+    volumes:
+      - lifelog-data:/app/server/data
+
+volumes:
+  lifelog-data:

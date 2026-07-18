@@ -27,8 +27,8 @@ Open the printed local URL. Your data is seeded with demo habits on first run an
 
 - **Dashboard** — today's completion, overall consistency, current streak, this month, today's habits, quick reflection.
 - **Habits** — per-habit grids (week / month / quarter / year), completion stats, add / edit / delete, slide-over details.
-- **Analytics** — _coming soon_.
-- **Settings** — themes, week start, categories, export / import / reset.
+- **Analytics** — daily/weekly/monthly trends, year overview, GitHub-style heatmap, category breakdown, automatic insights.
+- **Settings** — themes, week start, categories, export / import / reset, cloud sync & account.
 
 ## Tech
 

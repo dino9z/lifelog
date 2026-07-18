@@ -66,6 +66,13 @@ function toNodeRequest(webReq, bodyBuf) {
 }
 
 export default async function handler(webReq) {
+  // DIAGNOSTIC short-circuit: prove Vercel reaches this handler at all.
+  if (webReq.url.endsWith('/api/health')) {
+    return new Response(JSON.stringify({ ok: true, ping: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+  }
   try {
     const app = await getApp()
 

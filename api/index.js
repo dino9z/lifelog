@@ -1,6 +1,5 @@
 import http from 'node:http'
 import { EventEmitter } from 'node:events'
-import app from '../server/index.js'
 
 // Vercel invokes this `api/` function as a Web Handler (Fluid compute): it
 // passes a Web `Request` and expects a Web `Response`. We adapt the Web
@@ -8,6 +7,12 @@ import app from '../server/index.js'
 // the Vercel-only middleware in server/index.js captures the response body
 // (overriding res.end) so we can return it as a Web `Response`. No listening
 // socket is involved.
+
+let appPromise = null
+function getApp() {
+  if (!appPromise) appPromise = import('../server/index.js').then((m) => m.default)
+  return appPromise
+}
 
 function toNodeRequest(webReq, bodyBuf) {
   const url = new URL(webReq.url)
@@ -21,16 +26,17 @@ function toNodeRequest(webReq, bodyBuf) {
   socket.writable = true
   socket.readable = true
   socket.connecting = false
-  socket.destroy = (err) => {
-    if (err) socket.emit('error', err)
+  socket.destroy = () => {
     socket.emit('close')
     return socket
   }
   socket.setTimeout = () => socket
   socket.pause = () => socket
   socket.resume = () => socket
+  socket.on('error', () => {})
 
   const req = new http.IncomingMessage(socket)
+  req.on('error', () => {})
   req.method = webReq.method
   req.url = url.pathname + url.search
   req.headers = headers
@@ -39,17 +45,6 @@ function toNodeRequest(webReq, bodyBuf) {
 
   if (bodyBuf) req.push(bodyBuf)
   req.push(null)
-
-  return req
-}
-
-export default async function handler(webReq) {
-  let bodyBuf = null
-  if (webReq.body && webReq.method !== 'GET' && webReq.method !== 'HEAD') {
-    bodyBuf = Buffer.from(await webReq.arrayBuffer())
-  }
-
-  const req = toNodeRequest(webReq, bodyBuf)
 
   // Pre-parse the body so express.json (body-parser) skips reading the
   // manually-fed stream. body-parser bails out when req._body is already set.
@@ -67,27 +62,51 @@ export default async function handler(webReq) {
     req._body = true
   }
 
-  const res = new http.ServerResponse(req)
+  return req
+}
 
-  await new Promise((resolve) => {
-    res.on('finish', resolve)
-    res.on('close', resolve)
-    app(req, res)
-  })
+export default async function handler(webReq) {
+  try {
+    const app = await getApp()
 
-  const status = res.statusCode || 200
-  const outHeaders = new Headers()
-  const raw = res.getHeaders()
-  for (const [k, v] of Object.entries(raw)) {
-    const lk = k.toLowerCase()
-    if (lk === 'set-cookie' || Array.isArray(v)) {
-      const arr = Array.isArray(v) ? v : [v]
-      for (const val of arr) outHeaders.append(lk, val)
-    } else {
-      outHeaders.set(lk, String(v))
+    let bodyBuf = null
+    if (webReq.body && webReq.method !== 'GET' && webReq.method !== 'HEAD') {
+      bodyBuf = Buffer.from(await webReq.arrayBuffer())
     }
-  }
 
-  const body = Buffer.concat(res.__chunks || [])
-  return new Response(new Uint8Array(body), { status, headers: outHeaders })
+    const req = toNodeRequest(webReq, bodyBuf)
+    const res = new http.ServerResponse(req)
+    res.on('error', () => {})
+
+    await new Promise((resolve, reject) => {
+      res.on('finish', resolve)
+      res.on('close', resolve)
+      try {
+        app(req, res)
+      } catch (e) {
+        reject(e)
+      }
+    })
+
+    const status = res.statusCode || 200
+    const outHeaders = new Headers()
+    const raw = res.getHeaders()
+    for (const [k, v] of Object.entries(raw)) {
+      const lk = k.toLowerCase()
+      if (lk === 'set-cookie' || Array.isArray(v)) {
+        const arr = Array.isArray(v) ? v : [v]
+        for (const val of arr) outHeaders.append(lk, val)
+      } else {
+        outHeaders.set(lk, String(v))
+      }
+    }
+
+    const body = Buffer.concat(res.__chunks || [])
+    return new Response(new Uint8Array(body), { status, headers: outHeaders })
+  } catch (e) {
+    return new Response(
+      JSON.stringify({ error: 'handler_failed', message: e.message, stack: e.stack }),
+      { status: 500, headers: { 'content-type': 'application/json' } }
+    )
+  }
 }

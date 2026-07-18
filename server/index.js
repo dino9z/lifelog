@@ -81,6 +81,28 @@ app.use((err, _req, res, next) => {
 app.use(helmet())
 app.use(express.json({ limit: '5mb' }))
 
+// On Vercel the function is invoked as a Web Handler (Fluid compute), so the
+// Express response is driven in-memory. Override res.end to buffer the body
+// and signal completion; the native end would try to write to a socket that
+// does not exist in this context. Only applied on Vercel — locally the real
+// ServerResponse is used.
+if (process.env.VERCEL) {
+  app.use((_req, res, next) => {
+    res.__chunks = []
+    res.end = function (chunk, encoding) {
+      if (chunk) {
+        res.__chunks.push(
+          typeof chunk === 'string' ? Buffer.from(chunk, encoding || 'utf8') : Buffer.from(chunk)
+        )
+      }
+      res.emit('finish')
+      res.emit('close')
+      return res
+    }
+    next()
+  })
+}
+
 // Wrap async handlers so Express 4 forwards rejections to the error handler.
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
 

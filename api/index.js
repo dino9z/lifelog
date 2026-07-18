@@ -1,7 +1,93 @@
+import http from 'node:http'
+import { EventEmitter } from 'node:events'
 import app from '../server/index.js'
 
-// Vercel serverless function entry. Fluid compute is disabled in vercel.json,
-// so Vercel runs this on the classic Node.js runtime and adapts the exported
-// Express app to a Node request handler natively. Requests rewritten from
-// /api/* (see vercel.json) reach `app`; Vercel's CDN serves the SPA.
-export default app
+// Vercel invokes this `api/` function as a Web Handler (Fluid compute): it
+// passes a Web `Request` and expects a Web `Response`. We adapt the Web
+// `Request` into a Node IncomingMessage, run it through the Express app, and
+// the Vercel-only middleware in server/index.js captures the response body
+// (overriding res.end) so we can return it as a Web `Response`. No listening
+// socket is involved.
+
+function toNodeRequest(webReq, bodyBuf) {
+  const url = new URL(webReq.url)
+  const headers = {}
+  for (const [k, v] of webReq.headers) headers[k.toLowerCase()] = v
+
+  const socket = new EventEmitter()
+  socket.remoteAddress = '127.0.0.1'
+  socket.remoteFamily = 'IPv4'
+  socket.encrypted = url.protocol === 'https:'
+  socket.writable = true
+  socket.readable = true
+  socket.connecting = false
+  socket.destroy = (err) => {
+    if (err) socket.emit('error', err)
+    socket.emit('close')
+    return socket
+  }
+  socket.setTimeout = () => socket
+  socket.pause = () => socket
+  socket.resume = () => socket
+
+  const req = new http.IncomingMessage(socket)
+  req.method = webReq.method
+  req.url = url.pathname + url.search
+  req.headers = headers
+  req.socket = socket
+  req.connection = socket
+
+  if (bodyBuf) req.push(bodyBuf)
+  req.push(null)
+
+  return req
+}
+
+export default async function handler(webReq) {
+  let bodyBuf = null
+  if (webReq.body && webReq.method !== 'GET' && webReq.method !== 'HEAD') {
+    bodyBuf = Buffer.from(await webReq.arrayBuffer())
+  }
+
+  const req = toNodeRequest(webReq, bodyBuf)
+
+  // Pre-parse the body so express.json (body-parser) skips reading the
+  // manually-fed stream. body-parser bails out when req._body is already set.
+  if (bodyBuf) {
+    const ct = webReq.headers.get('content-type') || ''
+    if (ct.includes('application/json')) {
+      try {
+        req.body = JSON.parse(bodyBuf.toString('utf8'))
+      } catch {
+        req.body = {}
+      }
+    } else {
+      req.body = bodyBuf.toString('utf8')
+    }
+    req._body = true
+  }
+
+  const res = new http.ServerResponse(req)
+
+  await new Promise((resolve) => {
+    res.on('finish', resolve)
+    res.on('close', resolve)
+    app(req, res)
+  })
+
+  const status = res.statusCode || 200
+  const outHeaders = new Headers()
+  const raw = res.getHeaders()
+  for (const [k, v] of Object.entries(raw)) {
+    const lk = k.toLowerCase()
+    if (lk === 'set-cookie' || Array.isArray(v)) {
+      const arr = Array.isArray(v) ? v : [v]
+      for (const val of arr) outHeaders.append(lk, val)
+    } else {
+      outHeaders.set(lk, String(v))
+    }
+  }
+
+  const body = Buffer.concat(res.__chunks || [])
+  return new Response(new Uint8Array(body), { status, headers: outHeaders })
+}

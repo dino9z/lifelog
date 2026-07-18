@@ -1,0 +1,201 @@
+/* Lifelog — base styles
+   Inter is bundled locally under /fonts. No external font CDN. */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/InterVariable.woff2") format("woff2");
+}
+
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --text-soft: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2da44e;
+  --accent-soft: #d6f0de;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---------- Layout ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.topbar .brand { font-weight: 600; letter-spacing: -0.01em; }
+.topbar .user { display: flex; align-items: center; gap: 8px; color: var(--text-soft); }
+.topbar .avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; overflow: hidden;
+  background: var(--accent-soft); font-size: 14px;
+}
+.topbar .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.btn:hover { background: #f3f4f6; }
+.btn.ghost { border-color: transparent; background: transparent; }
+
+.shell { max-width: 920px; margin: 0 auto; padding: 24px 20px 64px; }
+
+/* ---------- Month grid ---------- */
+.month-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.month-title { font-size: 18px; font-weight: 600; }
+.month-nav button { margin-left: 6px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.grid .weekday {
+  text-align: center; font-size: 12px; color: var(--text-soft);
+  padding-bottom: 4px;
+}
+.day {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.day:hover { border-color: var(--accent); }
+.day.empty { border: none; background: transparent; }
+.day .num { font-size: 13px; color: var(--text-soft); }
+.day.today .num { color: var(--text); font-weight: 600; }
+
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent);
+}
+/* intensity tiers (contribution-graph feel) */
+.dot.i1 { opacity: 0.35; }
+.dot.i2 { opacity: 0.55; }
+.dot.i3 { opacity: 0.78; }
+.dot.i4 { opacity: 1; }
+
+/* ---------- Day detail ---------- */
+.detail {
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.detail h3 { margin: 0 0 4px; font-size: 16px; }
+.detail .meta { color: var(--text-soft); font-size: 13px; margin-bottom: 12px; }
+.detail textarea {
+  width: 100%; min-height: 120px; resize: vertical;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px; font-family: inherit; font-size: 14px; color: var(--text);
+}
+.detail .row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 14px; color: var(--text);
+}
+.toggle .box {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--border); display: inline-block;
+}
+.toggle.on .box { background: var(--accent); border-color: var(--accent); }
+.save-status { font-size: 12px; color: var(--text-soft); }
+.save-status.saving { color: var(--accent); }
+
+/* ---------- Search palette ---------- */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: grid; place-items: start center; padding-top: 12vh;
+  z-index: 50;
+}
+.palette {
+  width: min(560px, 92vw);
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+.palette input {
+  width: 100%; border: none; padding: 16px; font-size: 16px;
+  border-bottom: 1px solid var(--border); outline: none; font-family: inherit;
+}
+.palette .results { max-height: 320px; overflow-y: auto; }
+.palette .result {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.palette .result:hover, .palette .result.active { background: #f3f4f6; }
+.palette .result .r-date { font-size: 12px; color: var(--text-soft); }
+.palette .result .r-note { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette .empty { padding: 16px; color: var(--text-soft); font-size: 14px; }
+
+/* ---------- Onboarding ---------- */
+.onboard {
+  max-width: 420px; margin: 14vh auto; padding: 28px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: var(--shadow);
+}
+.onboard h1 { margin: 0 0 6px; font-size: 22px; }
+.onboard p { color: var(--text-soft); margin: 0 0 18px; font-size: 14px; }
+.onboard label { display: block; font-size: 13px; margin-bottom: 6px; }
+.onboard input[type="text"] {
+  width: 100%; padding: 10px; border: 1px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: 14px; margin-bottom: 14px;
+}
+
+/* ---------- Empty states ---------- */
+.empty-state { text-align: center; color: var(--text-soft); padding: 40px 0; }
+.empty-state .big { font-size: 16px; color: var(--text); margin-bottom: 4px; }
+
+/* ---------- Shortcut sheet ---------- */
+.shortcuts { padding: 20px; }
+.shortcuts h2 { margin: 0 0 12px; font-size: 16px; }
+.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; }
+.shortcuts kbd {
+  background: #f3f4f6; border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 6px; font-size: 12px; font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

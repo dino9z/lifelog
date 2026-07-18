@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Theme tokens — only Dark + Light ship in this pass.
+   Adding Forest/Ocean/etc. later = one more :root[data-theme]
+   block below. Every surface reads from these variables, so the
+   whole app re-themes instantly.
+   Values are space-separated RGB channels for Tailwind's
+   `rgb(var(--x) / <alpha-value>)` color tokens.
+   ============================================================ */
+
+:root,
+[data-theme='dark'] {
+  --base: 13 16 23;
+  --surface: 21 25 35;
+  --surface-2: 29 34 47;
+  --fg: 236 239 246;
+  --muted: 150 160 178;
+  --border: 255 255 255;
+  --accent: 129 140 248;
+  --accent-2: 56 189 248;
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --base: 242 244 249;
+  --surface: 255 255 255;
+  --surface-2: 247 249 252;
+  --fg: 17 24 39;
+  --muted: 100 110 130;
+  --border: 17 24 39;
+  --accent: 79 70 229;
+  --accent-2: 14 165 233;
+  color-scheme: light;
+}
+
+/* ---- Nature & mood themes (all dark-based, on-brand with the glass system) ---- */
+
+[data-theme='forest'] {
+  --base: 10 18 14;
+  --surface: 16 26 21;
+  --surface-2: 22 34 28;
+  --fg: 228 240 230;
+  --muted: 140 160 148;
+  --border: 255 255 255;
+  --accent: 52 211 153;
+  --accent-2: 45 212 191;
+  color-scheme: dark;
+}
+
+[data-theme='ocean'] {
+  --base: 6 16 28;
+  --surface: 11 24 40;
+  --surface-2: 16 32 52;
+  --fg: 224 238 250;
+  --muted: 140 165 190;
+  --border: 255 255 255;
+  --accent: 56 189 248;
+  --accent-2: 45 212 191;
+  color-scheme: dark;
+}
+
+[data-theme='rain'] {
+  --base: 14 22 32;
+  --surface: 20 30 42;
+  --surface-2: 27 39 54;
+  --fg: 226 234 244;
+  --muted: 145 162 182;
+  --border: 255 255 255;
+  --accent: 125 211 252;
+  --accent-2: 96 165 250;
+  color-scheme: dark;
+}
+
+[data-theme='coffee'] {
+  --base: 26 18 11;
+  --surface: 38 27 18;
+  --surface-2: 50 36 24;
+  --fg: 245 235 222;
+  --muted: 180 160 140;
+  --border: 255 255 255;
+  --accent: 214 160 90;
+  --accent-2: 217 119 83;
+  color-scheme: dark;
+}
+
+[data-theme='sakura'] {
+  --base: 26 15 22;
+  --surface: 38 23 33;
+  --surface-2: 50 30 44;
+  --fg: 248 230 240;
+  --muted: 185 155 175;
+  --border: 255 255 255;
+  --accent: 244 168 212;
+  --accent-2: 249 168 212;
+  color-scheme: dark;
+}
+
+[data-theme='future'] {
+  --base: 5 6 10;
+  --surface: 10 12 18;
+  --surface-2: 16 20 30;
+  --fg: 230 245 250;
+  --muted: 130 150 165;
+  --border: 255 255 255;
+  --accent: 34 211 238;
+  --accent-2: 99 102 241;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: rgb(var(--border) / 0.08);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-base text-fg font-sans antialiased;
+    background-image: radial-gradient(
+        60rem 60rem at 110% -10%,
+        rgb(var(--accent) / 0.12),
+        transparent 60%
+      ),
+      radial-gradient(50rem 50rem at -10% 110%, rgb(var(--accent-2) / 0.1), transparent 55%);
+    background-attachment: fixed;
+    transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent/70 ring-offset-2 ring-offset-base;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-surface/70 backdrop-blur-xl border border-border/10 shadow-soft;
+  }
+
+  .glass-2 {
+    @apply bg-surface-2/70 backdrop-blur-md border border-border/10;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}
+
+/* Refined scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border) / 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--border) / 0.2);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--border) / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

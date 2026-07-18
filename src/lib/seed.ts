@@ -79,5 +79,5 @@ export function generateSeed(): LifelogData {
     reminder: { enabled: false, time: '20:00' },
   }
 
-  return { version: 1, user, habits, entries, reflections, settings }
+  return { version: 1, user, habits, entries, reflections, settings, updatedAt: Date.now() }
 }

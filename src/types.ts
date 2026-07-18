@@ -68,4 +68,5 @@ export interface LifelogData {
   entries: HabitEntry[]
   reflections: DailyReflection[]
   settings: Settings
+  updatedAt?: number
 }

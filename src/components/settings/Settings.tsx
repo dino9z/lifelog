@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Download, Upload, RotateCcw, Plus, Check, CloudOff } from 'lucide-react'
+import { Download, Upload, RotateCcw, Plus, Check, LogIn, UserPlus, RefreshCw, LogOut } from 'lucide-react'
 import { useStore } from '../../store'
 import { exportData, parseImport } from '../../lib/exportImport'
 import { ensurePermission } from '../../lib/reminder'
@@ -20,6 +20,16 @@ function Section({ title, description, children }: { title: string; description?
   )
 }
 
+function relativeTime(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return new Date(ts).toLocaleDateString()
+}
+
 export function Settings() {
   const settings = useStore((s) => s.settings)
   const setWeekStart = useStore((s) => s.setWeekStart)
@@ -27,10 +37,40 @@ export function Settings() {
   const addCategory = useStore((s) => s.addCategory)
   const importData = useStore((s) => s.importData)
   const resetAll = useStore((s) => s.resetAll)
+  const account = useStore((s) => s.account)
+  const syncStatus = useStore((s) => s.syncStatus)
+  const lastSyncedAt = useStore((s) => s.lastSyncedAt)
+  const signup = useStore((s) => s.signup)
+  const login = useStore((s) => s.login)
+  const logout = useStore((s) => s.logout)
+  const syncNow = useStore((s) => s.syncNow)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [catInput, setCatInput] = useState('')
   const [flash, setFlash] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const handleAuth = async (mode: 'login' | 'signup') => {
+    setAuthError(null)
+    if (!email.includes('@') || password.length < 6) {
+      setAuthError('Enter a valid email and a password of 6+ characters.')
+      return
+    }
+    setBusy(true)
+    try {
+      if (mode === 'signup') await signup(email, password)
+      else await login(email, password)
+      setEmail('')
+      setPassword('')
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const notify = (msg: string) => {
     setFlash(msg)
@@ -182,14 +222,76 @@ export function Settings() {
         )}
       </Section>
 
-      <Section title="Sync & account" description="Your data stays on this device for now.">
-        <div className="flex items-start gap-3 rounded-xl border border-border/10 bg-surface-2/40 p-3">
-          <CloudOff size={18} className="mt-0.5 shrink-0 text-muted" />
-          <p className="text-sm text-muted">
-            Cloud sync and accounts need a backend service. Until then, use Export / Import below to move your
-            data between devices — your information never leaves your machine.
-          </p>
-        </div>
+      <Section title="Sync & account" description="Sign in to sync your data across devices (last-write-wins).">
+        {account ? (
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent">
+                  <LogIn size={16} />
+                </span>
+                <div>
+                  <div className="text-sm font-medium">{account.email}</div>
+                  <div className="text-xs text-muted">
+                    {syncStatus === 'syncing'
+                      ? 'Syncing…'
+                      : lastSyncedAt
+                        ? `Synced ${relativeTime(lastSyncedAt)}`
+                        : 'Signed in'}
+                  </div>
+                </div>
+              </div>
+              <Button variant="subtle" size="sm" onClick={() => logout()}>
+                <LogOut size={15} /> Log out
+              </Button>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <Button variant="primary" size="sm" onClick={() => syncNow()} disabled={syncStatus === 'syncing'}>
+                <RefreshCw size={15} className={syncStatus === 'syncing' ? 'animate-spin' : ''} /> Sync now
+              </Button>
+              {syncStatus === 'error' && (
+                <span className="text-xs text-rose-400">Last sync failed — retrying on next change.</span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleAuth('login')
+            }}
+            className="space-y-3"
+          >
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              className="w-full rounded-xl border border-border/10 bg-surface-2/50 px-3 py-2.5 text-sm text-fg placeholder:text-muted/60 focus:border-accent/40"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password (6+ chars)"
+              autoComplete="current-password"
+              className="w-full rounded-xl border border-border/10 bg-surface-2/50 px-3 py-2.5 text-sm text-fg placeholder:text-muted/60 focus:border-accent/40"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary" size="sm" disabled={busy}>
+                <LogIn size={15} /> Log in
+              </Button>
+              <Button type="button" variant="subtle" size="sm" disabled={busy} onClick={() => handleAuth('signup')}>
+                <UserPlus size={15} /> Sign up
+              </Button>
+            </div>
+            {authError && <p className="text-xs text-rose-400">{authError}</p>}
+            <p className="text-xs text-muted">
+              Your snapshot is stored under your account. You can still use Lifelog fully offline.
+            </p>
+          </form>
+        )}
       </Section>
 
       <Section title="About">

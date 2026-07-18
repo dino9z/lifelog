@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
-import { Download, Upload, RotateCcw, Plus, Check, LogIn, UserPlus, RefreshCw, LogOut } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Download, Upload, RotateCcw, Plus, Check, LogIn, UserPlus, RefreshCw, LogOut, KeyRound, Github } from 'lucide-react'
 import { useStore } from '../../store'
+import { API_BASE, getProviders } from '../../lib/api'
 import { exportData, parseImport } from '../../lib/exportImport'
 import { ensurePermission } from '../../lib/reminder'
 import type { LifelogData } from '../../types'
@@ -39,11 +40,14 @@ export function Settings() {
   const resetAll = useStore((s) => s.resetAll)
   const account = useStore((s) => s.account)
   const syncStatus = useStore((s) => s.syncStatus)
+  const needsSyncKey = useStore((s) => s.needsSyncKey)
+  const encKey = useStore((s) => s.encKey)
   const lastSyncedAt = useStore((s) => s.lastSyncedAt)
   const signup = useStore((s) => s.signup)
   const login = useStore((s) => s.login)
   const logout = useStore((s) => s.logout)
   const syncNow = useStore((s) => s.syncNow)
+  const applySyncKey = useStore((s) => s.applySyncKey)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [catInput, setCatInput] = useState('')
@@ -52,11 +56,17 @@ export function Settings() {
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [providers, setProviders] = useState<{ google: boolean; github: boolean }>({ google: false, github: false })
+  const [syncKeyInput, setSyncKeyInput] = useState('')
+
+  useEffect(() => {
+    getProviders().then(setProviders).catch(() => {})
+  }, [])
 
   const handleAuth = async (mode: 'login' | 'signup') => {
     setAuthError(null)
-    if (!email.includes('@') || password.length < 6) {
-      setAuthError('Enter a valid email and a password of 6+ characters.')
+    if (!email.includes('@') || password.length < 8) {
+      setAuthError('Enter a valid email and a password of 8+ characters.')
       return
     }
     setBusy(true)
@@ -253,6 +263,53 @@ export function Settings() {
                 <span className="text-xs text-rose-400">Last sync failed — retrying on next change.</span>
               )}
             </div>
+            {account.provider && account.provider !== 'password' && (
+              <div className="mt-3 rounded-xl border border-border/10 bg-surface-2/40 p-3">
+                <div className="text-xs font-medium text-fg">End-to-end encryption key</div>
+                <p className="mt-1 text-xs text-muted">
+                  Your data is encrypted with a device key (you signed in with {account.provider}). To use your
+                  account on a new device, export this key and import it there.
+                </p>
+                <div className="mt-2">
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(encKey || '')
+                      notify('Sync key copied to clipboard')
+                    }}
+                  >
+                    <KeyRound size={14} /> Export sync key
+                  </Button>
+                </div>
+              </div>
+            )}
+            {needsSyncKey && (
+              <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3">
+                <div className="text-xs font-medium text-fg">Import your sync key</div>
+                <p className="mt-1 text-xs text-muted">
+                  This device can’t decrypt your synced data. Paste the key you exported from another device.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={syncKeyInput}
+                    onChange={(e) => setSyncKeyInput(e.target.value)}
+                    placeholder="Paste sync key"
+                    className="w-full rounded-xl border border-border/10 bg-surface-2/50 px-3 py-2 text-sm text-fg placeholder:text-muted/60 focus:border-accent/40"
+                  />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      applySyncKey(syncKeyInput.trim())
+                      setSyncKeyInput('')
+                    }}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <form
@@ -274,7 +331,7 @@ export function Settings() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password (6+ chars)"
+              placeholder="Password (8+ chars)"
               autoComplete="current-password"
               className="w-full rounded-xl border border-border/10 bg-surface-2/50 px-3 py-2.5 text-sm text-fg placeholder:text-muted/60 focus:border-accent/40"
             />
@@ -287,8 +344,41 @@ export function Settings() {
               </Button>
             </div>
             {authError && <p className="text-xs text-rose-400">{authError}</p>}
+            {(providers.google || providers.github) && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <span className="h-px flex-1 bg-border/10" /> or <span className="h-px flex-1 bg-border/10" />
+                </div>
+                {providers.google && (
+                  <Button
+                    type="button"
+                    variant="subtle"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      window.location.href = `${API_BASE}/api/auth/google`
+                    }}
+                  >
+                    Continue with Google
+                  </Button>
+                )}
+                {providers.github && (
+                  <Button
+                    type="button"
+                    variant="subtle"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      window.location.href = `${API_BASE}/api/auth/github`
+                    }}
+                  >
+                    <Github size={15} /> Continue with GitHub
+                  </Button>
+                )}
+              </div>
+            )}
             <p className="text-xs text-muted">
-              Your snapshot is stored under your account. You can still use Lifelog fully offline.
+              Your snapshot is stored encrypted under your account. You can still use Lifelog fully offline.
             </p>
           </form>
         )}

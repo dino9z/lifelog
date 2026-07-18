@@ -15,10 +15,14 @@ import {
   signup as apiSignup,
   login as apiLogin,
   logout as apiLogout,
+  refreshAuth as apiRefresh,
   pullSync,
   pushSync,
+  getMe,
+  registerAuthRefresh,
   type AuthUser,
 } from './lib/api'
+import { deriveKey, encrypt, decrypt, randomKey } from './lib/crypto'
 
 type SyncStatus = 'idle' | 'syncing' | 'ok' | 'error'
 
@@ -38,6 +42,9 @@ interface Actions {
   signup: (email: string, password: string) => Promise<void>
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  refresh: () => Promise<void>
+  oauthConsume: () => Promise<void>
+  applySyncKey: (key: string) => Promise<void>
   syncNow: () => Promise<void>
   _push: () => Promise<void>
   _pullThenPush: () => Promise<void>
@@ -45,8 +52,11 @@ interface Actions {
 
 interface AuthState {
   token: string | null
+  refreshToken: string | null
+  encKey: string | null
   account: AuthUser | null
   syncStatus: SyncStatus
+  needsSyncKey: boolean
   lastSyncedAt: number | null
   updatedAt: number
 }
@@ -72,8 +82,11 @@ export const useStore = create<Store>()(
     (set, get) => ({
       ...seed,
       token: null,
+      refreshToken: null,
+      encKey: null,
       account: null,
       syncStatus: 'idle',
+      needsSyncKey: false,
       lastSyncedAt: null,
       updatedAt: seed.updatedAt ?? Date.now(),
 
@@ -160,10 +173,11 @@ export const useStore = create<Store>()(
       resetAll: () => set(() => ({ ...generateSeed(), updatedAt: Date.now() })),
 
       _push: async () => {
-        const { token, updatedAt } = get()
+        const { token, encKey, updatedAt } = get()
         if (!token) return
         try {
-          const res = await pushSync(token, toData(get()), updatedAt || Date.now())
+          const data = encKey ? await encrypt(encKey, toData(get())) : toData(get())
+          const res = await pushSync(token, data, updatedAt || Date.now())
           set({ updatedAt: res.updatedAt, lastSyncedAt: Date.now() })
         } catch (e) {
           console.error('Lifelog sync push failed', e)
@@ -171,14 +185,25 @@ export const useStore = create<Store>()(
       },
 
       _pullThenPush: async () => {
-        const { token } = get()
+        const { token, encKey } = get()
         if (!token) return
         try {
           const { snapshot, updatedAt: remoteTs } = await pullSync(token)
           const localTs = get().updatedAt || 0
           const neverSynced = get().lastSyncedAt == null
           if (snapshot && (neverSynced || remoteTs > localTs)) {
-            get().importData(snapshot)
+            if (encKey) {
+              try {
+                const data = (await decrypt(encKey, snapshot)) as LifelogData
+                get().importData(data)
+              } catch {
+                // Can't decrypt (e.g. social login on a new device without the sync key).
+                set({ needsSyncKey: true, syncStatus: 'error' })
+                return
+              }
+            } else {
+              get().importData(snapshot as unknown as LifelogData)
+            }
           }
           await get()._push()
         } catch (e) {
@@ -189,8 +214,9 @@ export const useStore = create<Store>()(
       signup: async (email, password) => {
         set({ syncStatus: 'syncing' })
         try {
-          const { token, user } = await apiSignup(email, password)
-          set({ token, account: user, syncStatus: 'ok', lastSyncedAt: Date.now() })
+          const { token, refreshToken, user, salt } = await apiSignup(email, password)
+          const encKey = salt ? await deriveKey(password, salt) : randomKey()
+          set({ token, refreshToken, encKey, account: user, syncStatus: 'ok' })
           await get()._push()
         } catch (e) {
           set({ syncStatus: 'error' })
@@ -201,13 +227,23 @@ export const useStore = create<Store>()(
       login: async (email, password) => {
         set({ syncStatus: 'syncing' })
         try {
-          const { token, user } = await apiLogin(email, password)
-          set({ token, account: user, syncStatus: 'ok', lastSyncedAt: Date.now() })
+          const { token, refreshToken, user, salt } = await apiLogin(email, password)
+          const encKey = salt ? await deriveKey(password, salt) : randomKey()
+          // Do NOT set lastSyncedAt here: a fresh device must import the server
+          // snapshot (neverSynced), a returning device keeps its value for LWW.
+          set({ token, refreshToken, encKey, account: user, syncStatus: 'ok' })
           await get()._pullThenPush()
         } catch (e) {
           set({ syncStatus: 'error' })
           throw e
         }
+      },
+
+      refresh: async () => {
+        const rt = get().refreshToken
+        if (!rt) throw new Error('No refresh token')
+        const { token, refreshToken } = await apiRefresh(rt)
+        set({ token, refreshToken })
       },
 
       logout: async () => {
@@ -219,7 +255,26 @@ export const useStore = create<Store>()(
             /* ignore */
           }
         }
-        set({ token: null, account: null, syncStatus: 'idle' })
+        set({ token: null, refreshToken: null, encKey: null, account: null, syncStatus: 'idle' })
+      },
+
+      oauthConsume: async () => {
+        if (typeof window === 'undefined') return
+        const hash = window.location.hash
+        const m = hash.match(/accessToken=([^&]+)&?refreshToken=([^&]+)/)
+        if (!m) return
+        const token = decodeURIComponent(m[1])
+        const refreshToken = decodeURIComponent(m[2])
+        history.replaceState(null, '', window.location.pathname + window.location.search)
+        try {
+          const { user } = await getMe(token)
+          // Social logins have no password: generate a device-bound key for E2E.
+          set({ token, refreshToken, encKey: randomKey(), account: user, syncStatus: 'ok', lastSyncedAt: null })
+          await get()._pullThenPush()
+        } catch (e) {
+          set({ syncStatus: 'error' })
+          throw e
+        }
       },
 
       syncNow: async () => {
@@ -234,6 +289,11 @@ export const useStore = create<Store>()(
           throw e
         }
       },
+
+      applySyncKey: async (key) => {
+        set({ encKey: key, needsSyncKey: false })
+        await get()._pullThenPush()
+      },
     }),
     {
       name: 'lifelog-v1',
@@ -247,6 +307,8 @@ export const useStore = create<Store>()(
         settings: state.settings,
         updatedAt: state.updatedAt,
         token: state.token,
+        refreshToken: state.refreshToken,
+        encKey: state.encKey,
         account: state.account,
         lastSyncedAt: state.lastSyncedAt,
       }),
@@ -265,6 +327,18 @@ useStore.subscribe((state, prev) => {
     })
   }
 })
+
+// Wire the API's transparent 401 -> refresh retry to the store.
+registerAuthRefresh(async () => {
+  await useStore.getState().refresh()
+  const s = useStore.getState()
+  return { token: s.token as string, refreshToken: s.refreshToken as string }
+})
+
+// On startup, consume OAuth tokens if we were redirected back from a provider.
+if (typeof window !== 'undefined') {
+  useStore.getState().oauthConsume().catch(() => {})
+}
 
 export function useSettings(): Settings {
   return useStore((s) => s.settings)

@@ -9,7 +9,11 @@
     "dev": "node --watch index.js"
   },
   "dependencies": {
+    "better-sqlite3": "^11.3.0",
     "cors": "^2.8.5",
-    "express": "^4.21.1"
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.0.0",
+    "nodemailer": "^9.0.3"
   }
 }

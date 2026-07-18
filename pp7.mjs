@@ -23,7 +23,7 @@ await goSettings(pageA)
 await pageA.type('input[type=email]', email)
 await pageA.type('input[type=password]', pw)
 await pageA.evaluate(() => [...document.querySelectorAll('button')].find((b) => /Sign up/.test(b.innerText))?.click())
-await new Promise((r) => setTimeout(r, 1500))
+await pageA.waitForFunction(() => /Sync now/.test(document.body.innerText), { timeout: 9000 }).catch(() => {})
 const aLoggedIn = await pageA.evaluate(() => /Sync now/.test(document.body.innerText))
 
 // toggle on Dashboard
@@ -39,7 +39,7 @@ const aSynced = await pageA.evaluate(() => /Synced/.test(document.body.innerText
 
 // reload A, confirm still logged in
 await pageA.reload({ waitUntil: 'networkidle0' })
-await new Promise((r) => setTimeout(r, 800))
+await new Promise((r) => setTimeout(r, 1500))
 await goSettings(pageA)
 const aPersist = await pageA.evaluate(() => /Sync now/.test(document.body.innerText))
 
@@ -50,7 +50,9 @@ await pageB.type('input[type=password]', pw)
 await pageB.evaluate(() => [...document.querySelectorAll('button')].find((b) => /Log in/.test(b.innerText))?.click())
 await pageB.waitForFunction(() => /Synced/.test(document.body.innerText), { timeout: 9000 }).catch(() => {})
 const bLoggedIn = await pageB.evaluate(() => /Sync now/.test(document.body.innerText))
+const bNeedsKey = await pageB.evaluate(() => /Import your sync key/.test(document.body.innerText))
 await go(pageB, 'Dashboard')
+await new Promise((r) => setTimeout(r, 3000))
 const bCount = await countOf(pageB)
 
 console.log('A signed up + logged in:', aLoggedIn)
@@ -58,6 +60,7 @@ console.log('A Dashboard count after local toggle:', aCount)
 console.log('A sync status shows "Synced":', aSynced)
 console.log('A session persists after reload:', aPersist)
 console.log('B logged in via pull:', bLoggedIn)
+console.log('B needsSyncKey (decrypt failed):', bNeedsKey)
 console.log('B Dashboard count == A (cross-device pull):', bCount === aCount, `(A=${aCount}, B=${bCount})`)
 console.log('ERRORS:', errs.length ? errs.join('\n') : 'none')
 await browser.close()

@@ -75,6 +75,32 @@ VITE_API_URL=http://localhost:8787
 npm run dev
 ```
 
-In the app, open **Settings → Account** to sign up or log in. Your entire local snapshot is synced with **last-write-wins** semantics (the most recently updated device wins). A new device pulls the server copy on first login. CORS is enabled on the server; for production, restrict `CORS_ORIGIN` and serve the app over HTTPS.
+In the app, open **Settings → Sync & account** to sign up or log in. Your entire local snapshot is
+encrypted in the browser (AES-GCM) and synced with **last-write-wins** semantics. A new device pulls the
+server copy on first login. See `SECURITY.md` for the full security model.
 
-> No email verification, password reset, or multi-device concurrent-edit merge yet — sync is single-writer LWW by snapshot.
+### Configuration (env)
+
+| Var | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8787` | Server port |
+| `CORS_ORIGIN` | dev origins | Comma-separated allowed frontend origins (set to your app's origin in prod) |
+| `PUBLIC_URL` | `http://localhost:8787` | Public base URL the server reports (used for OAuth redirects) |
+| `APP_URL` | `http://localhost:5173` | Frontend origin OAuth redirects back to |
+| `ACCESS_TTL_MIN` | `60` | Access-token lifetime (minutes) |
+| `REFRESH_TTL_DAYS` | `30` | Refresh-token lifetime (days) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Enable "Continue with Google" |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | — | Enable "Continue with GitHub" |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_FROM` | — | Enable email verification |
+
+### Production notes
+
+- **TLS**: the server is plain HTTP by default — put it behind a reverse proxy (nginx/Caddy) with HTTPS.
+- **CORS**: set `CORS_ORIGIN` to your frontend's origin(s); unknown origins get `403`.
+- **E2E**: for password accounts the key is derived from your password, so sync works across devices
+  without the server seeing it. For Google/GitHub accounts a random device-bound key is used — export it
+  from an existing device (Settings → Export sync key) and import it on a new one.
+- **Do not expose `vite dev`** to untrusted networks (dev-server advisory in its `esbuild` dependency);
+  use `vite preview` or a static host for production.
+
+> No password reset yet. Sync is single-writer LWW by snapshot (no per-field merge of concurrent offline edits).

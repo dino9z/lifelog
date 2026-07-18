@@ -21,32 +21,31 @@ if (!DATABASE_URL) console.error('[startup] DATABASE_URL is not set — API will
 
 async function initSchema() {
   if (!sql) return
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT UNIQUE,
-      provider TEXT NOT NULL DEFAULT 'password',
-      provider_id TEXT,
-      salt TEXT,
-      hash TEXT,
-      token_hash TEXT,
-      token_expires BIGINT,
-      refresh_hash TEXT,
-      refresh_expires BIGINT,
-      verified INTEGER NOT NULL DEFAULT 1,
-      verify_token TEXT
-    );
-    CREATE TABLE IF NOT EXISTS sync (
-      user_id TEXT PRIMARY KEY,
-      snapshot TEXT,
-      updated_at BIGINT
-    );
-    CREATE TABLE IF NOT EXISTS rate_limits (
-      key TEXT PRIMARY KEY,
-      count INTEGER NOT NULL DEFAULT 0,
-      reset_at BIGINT NOT NULL
-    );
-  `
+  // The Neon HTTP driver rejects multiple statements per query, so run them separately.
+  await sql`CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE,
+    provider TEXT NOT NULL DEFAULT 'password',
+    provider_id TEXT,
+    salt TEXT,
+    hash TEXT,
+    token_hash TEXT,
+    token_expires BIGINT,
+    refresh_hash TEXT,
+    refresh_expires BIGINT,
+    verified INTEGER NOT NULL DEFAULT 1,
+    verify_token TEXT
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS sync (
+    user_id TEXT PRIMARY KEY,
+    snapshot TEXT,
+    updated_at BIGINT
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS rate_limits (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at BIGINT NOT NULL
+  )`
 }
 if (sql) {
   initSchema().catch((e) => console.error('[startup] DB schema init failed:', e))
@@ -56,15 +55,21 @@ const app = express()
 // Behind Vercel (or any proxy): trust X-Forwarded-For so the rate limiter keys off the real IP.
 if (process.env.TRUST_PROXY === '1' || process.env.VERCEL) app.set('trust proxy', 1)
 
-const ALLOWED = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean)
+// Allow the app's own origin(s) by default (same-origin module scripts send an Origin header),
+// plus any explicitly configured CORS_ORIGIN (for cross-origin setups / custom domains).
+const ALLOWED = new Set(
+  [process.env.CORS_ORIGIN, BASE, APP_URL]
+    .filter(Boolean)
+    .flatMap((s) => s.split(','))
+    .map((s) => s.trim())
+    .filter(Boolean)
+)
 app.use(
   cors({
     origin: (origin, cb) => {
-      // Same-origin requests have no Origin header; allow them. Otherwise require an allowed origin.
-      const allow = !origin || ALLOWED.includes(origin)
+      // Same-origin requests may still send an Origin header (module scripts fetch in CORS mode);
+      // allow them, and any explicitly allowed origin.
+      const allow = !origin || ALLOWED.has(origin)
       cb(allow ? null : new Error('Not allowed by CORS'), allow)
     },
   })

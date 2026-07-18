@@ -1,6 +1,8 @@
 services:
   lifelog:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     ports:
       - "8787:8787"

@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+*.log
+.env
+.env.*
+server/data
+*.mjs
+Dockerfile
+docker-compose.yml
+nginx.conf
+Caddyfile
+DEPLOY.md
+SECURITY.md
+README.md

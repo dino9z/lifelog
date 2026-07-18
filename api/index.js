@@ -79,11 +79,25 @@ export default async function handler(webReq) {
     res.on('error', () => {})
 
     await new Promise((resolve, reject) => {
-      res.on('finish', resolve)
-      res.on('close', resolve)
+      const timer = setTimeout(() => {
+        try {
+          res.end(JSON.stringify({ error: 'handler_timeout' }))
+        } catch {
+          resolve()
+        }
+      }, 9000)
+      res.on('finish', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      res.on('close', () => {
+        clearTimeout(timer)
+        resolve()
+      })
       try {
         app(req, res)
       } catch (e) {
+        clearTimeout(timer)
         reject(e)
       }
     })

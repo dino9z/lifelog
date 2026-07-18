@@ -16,7 +16,19 @@ const SMTP_CONFIGURED = !!(process.env.SMTP_HOST && process.env.SMTP_USER && pro
 
 // --- Postgres (Neon serverless driver). Module-singleton; reused across warm invocations.
 const DATABASE_URL = process.env.DATABASE_URL
-const sql = DATABASE_URL ? neon(DATABASE_URL) : null
+const _sql = DATABASE_URL
+  ? neon(DATABASE_URL, { fetchOptions: { cache: 'no-store' } })
+  : null
+// Wrap queries with a hard timeout so an unreachable/slow database fails fast
+// (returns an error) instead of hanging the whole Vercel invocation.
+const QUERY_TIMEOUT_MS = Number(process.env.QUERY_TIMEOUT_MS) || 8000
+const sql = _sql
+  ? (strings, ...values) =>
+      Promise.race([
+        _sql(strings, ...values),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('DB_QUERY_TIMEOUT')), QUERY_TIMEOUT_MS))
+      ])
+  : null
 if (!DATABASE_URL) console.error('[startup] DATABASE_URL is not set — API will not work until it is provided.')
 
 async function initSchema() {
@@ -431,6 +443,15 @@ if (STATIC_DIR) {
     res.sendFile(STATIC_DIR + '/index.html')
   })
 }
+
+// General error handler — surface errors as JSON so the API client (and the
+// Vercel function logs) can see what went wrong instead of a blank hang.
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err)
+  if (res.headersSent) return _next(err)
+  const message = err && err.message ? err.message : 'Internal server error'
+  res.status(500).json({ error: message })
+})
 
 // On Vercel the platform imports this module and routes requests to `app`; do not listen.
 if (!process.env.VERCEL) {

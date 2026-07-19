@@ -7,6 +7,10 @@ import { EventEmitter } from 'node:events'
 // the Vercel-only middleware in server/index.js captures the response body
 // (overriding res.end) so we can return it as a Web `Response`. No listening
 // socket is involved.
+//
+// Routing note: the vercel.json rewrite sends "/api/<path>" to "/api" (the
+// function), carrying the original sub-path in the `__orig` query param, since
+// Vercel rewrites strip the path. We reconstruct the logical path here.
 
 let appPromise = null
 function getApp() {
@@ -14,7 +18,7 @@ function getApp() {
   return appPromise
 }
 
-function toNodeRequest(webReq, bodyBuf) {
+function toNodeRequest(webReq, bodyBuf, logicalPath) {
   const url = new URL(webReq.url)
   const headers = {}
   for (const [k, v] of webReq.headers) headers[k.toLowerCase()] = v
@@ -38,7 +42,7 @@ function toNodeRequest(webReq, bodyBuf) {
   const req = new http.IncomingMessage(socket)
   req.on('error', () => {})
   req.method = webReq.method
-  req.url = url.pathname + url.search
+  req.url = logicalPath
   req.headers = headers
   req.socket = socket
   req.connection = socket
@@ -66,9 +70,14 @@ function toNodeRequest(webReq, bodyBuf) {
 }
 
 export default async function handler(webReq) {
-  // DIAGNOSTIC short-circuit: prove Vercel reaches this handler at all.
-  if (webReq.url.endsWith('/api/health')) {
-    return new Response(JSON.stringify({ ok: true, ping: true }), {
+  const u = new URL(webReq.url)
+  const orig = u.searchParams.get('__orig')
+  const search = u.search.replace(/[?&]?__orig=[^&]*/g, '')
+  const logicalPath = (orig ? '/api/' + orig : u.pathname) + search
+
+  // Health is DB-free so it always proves the function runs (and isolates DB issues).
+  if (logicalPath === '/api/health') {
+    return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { 'content-type': 'application/json' }
     })
@@ -81,7 +90,7 @@ export default async function handler(webReq) {
       bodyBuf = Buffer.from(await webReq.arrayBuffer())
     }
 
-    const req = toNodeRequest(webReq, bodyBuf)
+    const req = toNodeRequest(webReq, bodyBuf, logicalPath)
     const res = new http.ServerResponse(req)
     res.on('error', () => {})
 

@@ -70,19 +70,21 @@ function toNodeRequest(webReq, bodyBuf, logicalPath) {
 }
 
 export default async function handler(webReq) {
-  const u = new URL(webReq.url)
-  const orig = u.searchParams.get('__orig')
-  const search = u.search.replace(/[?&]?__orig=[^&]*/g, '')
-  const logicalPath = (orig ? '/api/' + orig : u.pathname) + search
-
-  // Health is DB-free so it always proves the function runs (and isolates DB issues).
-  if (logicalPath === '/api/health') {
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' }
-    })
-  }
   try {
+    const rawUrl = webReq.url || '/'
+    const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://localhost' + rawUrl)
+    const orig = u.searchParams.get('__orig')
+    const search = u.search.replace(/[?&]?__orig=[^&]*/g, '')
+    const logicalPath = (orig ? '/api/' + orig : u.pathname) + search
+
+    // Health is DB-free so it always proves the function runs (and isolates DB issues).
+    if (logicalPath === '/api/health') {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+
     const app = await getApp()
 
     let bodyBuf = null

@@ -3,7 +3,12 @@ import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import helmet from 'helmet'
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto'
-import { neon } from '@neondatabase/serverless'
+import { neon, neonConfig } from '@neondatabase/serverless'
+
+// Force the HTTP (fetch) driver instead of the default WebSocket pool. Serverless
+// platforms like Vercel's Fluid compute suspend/hang on long-lived WebSocket
+// connections, so queries must go over plain HTTPS. Works locally too.
+neonConfig.poolQueryViaFetch = true
 
 const PORT = Number(process.env.PORT) || 8787
 const VERCEL_URL = process.env.VERCEL_URL

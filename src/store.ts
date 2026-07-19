@@ -170,7 +170,14 @@ export const useStore = create<Store>()(
           lastSyncedAt: Date.now(),
         })),
 
-      resetAll: () => set(() => ({ ...generateSeed(), updatedAt: Date.now() })),
+      resetAll: () =>
+        set((state) => ({
+          ...state,
+          habits: [],
+          entries: [],
+          reflections: [],
+          updatedAt: Date.now(),
+        })),
 
       _push: async () => {
         const { token, encKey, updatedAt } = get()

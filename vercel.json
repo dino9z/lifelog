@@ -1,7 +1,4 @@
 {
-  "functions": {
-    "api/index.js": { "regions": ["sin1"] }
-  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }

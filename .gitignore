@@ -5,3 +5,5 @@ dist
 .env
 server/data/
 .DS_Store
+.vercel
+.env*

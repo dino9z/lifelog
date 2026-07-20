@@ -69,7 +69,7 @@ function toNodeRequest(webReq, bodyBuf, logicalPath) {
   return req
 }
 
-export default async function handler(webReq) {
+export async function fetch(webReq) {
   try {
     const rawUrl = webReq.url || '/'
     const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://localhost' + rawUrl)
